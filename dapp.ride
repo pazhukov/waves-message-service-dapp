@@ -1,0 +1,118 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+let serviceFee = 100000
+let empty = "NULL"
+
+let allMessageBoardKey = "all_message"
+let activeMessageKey = "active_message"
+let earnedWavesKey = "earnedWaves"
+let serviceFeeKey = "serviceFee"
+
+let dAppOwner = "#dApp Owner Waves Address#"
+
+func uniqueKey(owner: String, text: String) = {
+    let uKey = toBase58String(sha256(toBytes(owner + text)))
+    uKey
+}
+
+func getNumberByKey(key:String) = {
+    let num = match getInteger(this, key) {
+        case a:Int => a
+        case _ => 0
+    }
+    num
+}
+
+func getStrByKey(key:String) = {
+    let str = match getString(this, key) {
+        case a:String => a
+        case _ => empty
+    }
+    str
+}
+
+func getSeviceFee() = {
+    let fee = match getInteger(this, serviceFeeKey) {
+        case a:Int => a
+        case _ => serviceFee
+    }
+    fee
+}
+
+@Callable(i)
+func setMessage(text: String) = {
+    let pmt = extract(i.payment)
+    let localFee = getSeviceFee()
+    if(isDefined(pmt.assetId)) then throw("WAVES token only at the moment") 
+    else {
+        if(pmt.amount != localFee) then throw("Wrong service fee amount") 
+        else {
+            let ownerAddress = toBase58String(i.caller.bytes)
+            let uKey = uniqueKey(ownerAddress, toString(height) + toBase58String(i.transactionId))
+            let allMessage = getNumberByKey(allMessageBoardKey)
+            let actMessage = getNumberByKey(activeMessageKey)
+            let earnedWaves = getNumberByKey(earnedWavesKey)
+            WriteSet([
+                DataEntry("owner_" + uKey, ownerAddress),
+                DataEntry("message_" + uKey, text),
+                DataEntry(allMessageBoardKey, allMessage + 1),
+                DataEntry(activeMessageKey, actMessage + 1),
+                DataEntry(earnedWavesKey, earnedWaves + localFee)
+            ])    
+
+        } 
+    } 
+}
+
+@Callable(i)
+func removeMessage(uKey: String) = {
+    let owner = getStrByKey("owner_" + uKey)
+    let actMessage = getNumberByKey(activeMessageKey)
+    let senderAddress = toBase58String(i.caller.bytes)
+    if(owner == empty) then throw("Message didn't found")
+    else if(owner != senderAddress) then throw("You don't owner of message " + uKey)
+    else {
+        WriteSet([
+            DataEntry(activeMessageKey, actMessage - 1),
+            DataEntry("message_" + uKey, "#REMOVED#")
+        ])
+    }
+}
+
+@Callable(i)
+func setServiceFee(newFee: Int) = {
+    let senderAddress = toBase58String(i.caller.bytes)
+    if(senderAddress != dAppOwner) then throw("You aren't owner this dApp")
+    else {
+        WriteSet([DataEntry(serviceFeeKey, newFee)])
+    }
+}
+
+@Callable(i)
+func violationDetected(uKey: String) = {
+    let actMessage = getNumberByKey(activeMessageKey)
+    let senderAddress = toBase58String(i.caller.bytes)
+    if(senderAddress != dAppOwner) then throw("You aren't owner this dApp")
+    else {
+        WriteSet([
+            DataEntry(activeMessageKey, actMessage - 1),
+            DataEntry("message_" + uKey, "#VIOLATION OF RULES#")
+        ])
+    }
+}
+
+@Callable(i)
+func withdraw(amount: Int) = {
+    let senderAddress = toBase58String(i.caller.bytes)
+    if(senderAddress != dAppOwner) then throw("You aren't owner this dApp")   
+    else {
+        TransferSet([ScriptTransfer(i.caller, amount, unit)])
+    }
+}
+
+@Verifier(tx)
+func verify() = {
+    sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+}
