@@ -12,5 +12,5 @@ Change #dApp Owner Waves Address# on real owner account (not dApp account)
 
 Example https://anteater.dev/data/
 
-June 2019 &copy; Pazhukov Max (@pazhukov)
+July 2019 &copy; Pazhukov Max (@pazhukov)
 
